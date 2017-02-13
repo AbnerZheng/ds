@@ -51,6 +51,7 @@ func (wk *Worker) Shutdown(_ *struct{}, res *ShutdownReply) error {
 }
 
 // Tell the master we exist and ready to work
+// 将worker注册到master上
 func (wk *Worker) register(master string) {
 	args := new(RegisterArgs)
 	args.Worker = wk.name
@@ -74,7 +75,7 @@ func RunWorker(MasterAddress string, me string,
 	wk.Reduce = ReduceFunc
 	wk.nRPC = nRPC
 	rpcs := rpc.NewServer()
-	rpcs.Register(wk)
+	rpcs.Register(wk) // 这句代码就是将Dotask这个函数注册到rpc上,从此，我们可以通过rpc调用Dotask函数了
 	os.Remove(me) // only needed for "unix"
 	l, e := net.Listen("unix", me)
 	if e != nil {
