@@ -30,8 +30,8 @@ func (mr *Master) schedule(phase jobPhase) {
 	var wg sync.WaitGroup
 	for i := 0; i < ntasks; i++ {
 		wg.Add(1)
-		go func(file string, phase jobPhase, taskNumber int, other int) { //开始发起rpc请求
-			defer wg.Done()
+		var rpc_call func(file string, phase jobPhase, taskNumber int, other int)
+		rpc_call = func(file string, phase jobPhase, taskNumber int, other int) { //开始发起rpc请求
 			// 构造传参
 			doTaskArgs := DoTaskArgs{JobName: mr.jobName, File: file, Phase: phase, TaskNumber: taskNumber, NumOtherPhase: other}
 			for worker := range (mr.registerChannel) {
@@ -40,14 +40,15 @@ func (mr *Master) schedule(phase jobPhase) {
 					go func() {
 						mr.registerChannel <- worker
 					}()
+					wg.Done()
 					return
 				} else {
-					fmt.Println("处理失败:", file)
+					go rpc_call(file, phase, taskNumber, other)
 					return
 				}
 			} // 拿到一个空闲的worker
-
-		}(mr.files[i], phase, i, nios)
+		}
+		go rpc_call(mr.files[i], phase, i, nios)
 	}
 	wg.Wait()
 
