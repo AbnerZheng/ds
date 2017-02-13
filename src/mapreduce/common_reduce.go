@@ -1,13 +1,34 @@
 package mapreduce
 
+import (
+	"encoding/json"
+	"os"
+	"log"
+	"sort"
+)
+
+type KeyValueSlice []KeyValue
+
+func (s KeyValueSlice) Len() int {
+	return len(s)
+}
+
+func (s KeyValueSlice) Less(i, j int) bool {
+	return s[i].Key < s[j].Key
+}
+
+func (s KeyValueSlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
 // doReduce does the job of a reduce worker: it reads the intermediate
 // key/value pairs (produced by the map phase) for this task, sorts the
 // intermediate key/value pairs by key, calls the user-defined reduce function
 // (reduceF) for each key, and writes the output to disk.
 func doReduce(
-	jobName string, // the name of the whole MapReduce job
+	jobName string,       // the name of the whole MapReduce job
 	reduceTaskNumber int, // which reduce task this is
-	nMap int, // the number of map tasks that were run ("M" in the paper)
+	nMap int,             // the number of map tasks that were run ("M" in the paper)
 	reduceF func(key string, values []string) string,
 ) {
 	// TODO:
@@ -31,4 +52,43 @@ func doReduce(
 	// 	enc.Encode(KeyValue{key, reduceF(...)})
 	// }
 	// file.Close()
+	res := make(KeyValueSlice, 0)
+	for m := 0; m < nMap; m++ {
+		fileName := reduceName(jobName, m, reduceTaskNumber)
+		inputFile, err := os.Open(fileName)
+		if err != nil {
+			log.Fatalf("打开文件%s错误", fileName)
+		}
+		defer inputFile.Close()
+		dec := json.NewDecoder(inputFile)
+		var v = new(KeyValue)
+		for {
+			err = dec.Decode(v)
+			if err != nil {
+				break
+			}
+			res = append(res, *v)
+		}
+	}
+
+	sort.Sort(res)
+
+	outputFileName := mergeName(jobName, reduceTaskNumber)
+	outputFile, err := os.Create(outputFileName)
+	if err != nil {
+	}
+	defer outputFile.Close()
+	enc := json.NewEncoder(outputFile)
+	var value []string
+	var preKey = res[0].Key
+	for _, k := range (res) {
+		if (preKey == k.Key) {
+			value = append(value, k.Value)
+		} else {
+			enc.Encode(KeyValue{preKey, reduceF(preKey, value)})
+			value = []string{k.Value}
+			preKey = k.Key
+		}
+	}
+	enc.Encode(KeyValue{preKey, reduceF(preKey, value)})
 }

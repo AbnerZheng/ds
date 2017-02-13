@@ -24,11 +24,13 @@ type DoTaskArgs struct {
 
 // ShutdownReply is the response to a WorkerShutdown.
 // It holds the number of tasks this worker has processed since it was started.
+// 保存该worker迄今一共处理好的任务数量
 type ShutdownReply struct {
 	Ntasks int
 }
 
 // RegisterArgs is the argument passed when a worker registers with the master.
+// worker注册到master时所传的参数
 type RegisterArgs struct {
 	Worker string
 }

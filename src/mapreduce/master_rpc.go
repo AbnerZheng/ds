@@ -16,8 +16,9 @@ func (mr *Master) Shutdown(_, _ *struct{}) error {
 	return nil
 }
 
-// startRPCServer staarts the Master's RPC server. It continues accepting RPC
+// startRPCServer starts the Master's RPC server. It continues accepting RPC
 // calls (Register in particular) for as long as the worker is alive.
+// startRPCServer 启动一个Master的RPC服务器. 它持续接受RPC调用直到worker死去
 func (mr *Master) startRPCServer() {
 	rpcs := rpc.NewServer()
 	rpcs.Register(mr)
@@ -30,6 +31,7 @@ func (mr *Master) startRPCServer() {
 
 	// now that we are listening on the master address, can fork off
 	// accepting connections to another thread.
+	// 既然我们监听在master地址， 可以fork 一个新的线程来接受连接
 	go func() {
 	loop:
 		for {
@@ -56,6 +58,8 @@ func (mr *Master) startRPCServer() {
 // stopRPCServer stops the master RPC server.
 // This must be done through an RPC to avoid race conditions between the RPC
 // server thread and the current thread.
+// 需要使用RPC来避免竞争条件
+// stopRPCServer 停止master RPC server
 func (mr *Master) stopRPCServer() {
 	var reply ShutdownReply
 	ok := call(mr.address, "Master.Shutdown", new(struct{}), &reply)

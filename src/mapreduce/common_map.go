@@ -2,6 +2,12 @@ package mapreduce
 
 import (
 	"hash/fnv"
+	"log"
+	"io/ioutil"
+	//"encoding/json"
+	"os"
+	"fmt"
+	"encoding/json"
 )
 
 // doMap does the job of a map worker: it reads one of the input files
@@ -22,8 +28,10 @@ func doMap(
 	//
 	// The intermediate output of a map task is stored in the file
 	// system as multiple files whose name indicates which map task produced
-	// them, as well as which reduce task they are for. Coming up with a
-	// scheme for how to store the key/value pairs on disk can be tricky,
+	// them, as well as which reduce task they are for.
+	// map任务的中间输出存储在文件中，文件名标识是哪个map任务产生该文件以及应该被哪个reduce任务处理
+	// 可以使用json格式作为持续化格式
+	// Coming up with a scheme for how to store the key/value pairs on disk can be tricky,
 	// especially when taking into account that both keys and values could
 	// contain newlines, quotes, and any other character you can think of.
 	//
@@ -40,6 +48,33 @@ func doMap(
 	//     err := enc.Encode(&kv)
 	//
 	// Remember to close the file after you have written all the values!
+
+	dat, err :=  ioutil.ReadFile(inFile)
+	var r []([]KeyValue) = make([]([]KeyValue), nReduce)
+	if err != nil{
+		log.Fatal(err)
+		return
+	}
+	dat_str := string(dat)
+	fmt.Println("开始执行Map任务")
+	inter := mapF(inFile, dat_str) // mapF 生成一个[]keyValue
+	for _, v := range inter{
+		slot := int(ihash(v.Key)) % nReduce
+		r[slot] = append(r[slot],v)
+	}
+
+	for i := 0; i<nReduce;i++  {
+		filename := reduceName(jobName, mapTaskNumber, i)
+		outputFile, err := os.OpenFile(filename , os.O_WRONLY|os.O_CREATE, 0666)
+		defer outputFile.Close()
+		if err != nil {
+			log.Fatal("写入失败")
+		}
+		enc:=json.NewEncoder(outputFile)
+		for _, kv := range(r[i]){
+			err = enc.Encode(&kv)
+		}
+	}
 }
 
 func ihash(s string) uint32 {

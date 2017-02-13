@@ -31,7 +31,7 @@ type Master struct {
 // up to report that they are ready to receive tasks.
 func (mr *Master) Register(args *RegisterArgs, _ *struct{}) error {
 	mr.Lock()
-	defer mr.Unlock()
+	defer mr.Unlock() // 运用到go的语言特性，将Unlock函数推迟到Register函数执行之后执行
 	debug("Register: worker %s\n", args.Worker)
 	mr.workers = append(mr.workers, args.Worker)
 	go func() {
@@ -52,6 +52,7 @@ func newMaster(master string) (mr *Master) {
 
 // Sequential runs map and reduce tasks sequentially, waiting for each task to
 // complete before scheduling the next.
+// 串行执行每个任务
 func Sequential(jobName string, files []string, nreduce int,
 	mapF func(string, string) []KeyValue,
 	reduceF func(string, []string) string,

@@ -7,7 +7,6 @@
       </MavenGeneralSettings>
     </option>
   </component>
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_7" default="true" project-jdk-name="Go 1.7.3" project-jdk-type="Go SDK" />
   <component name="SbtLocalSettings">
     <option name="modificationStamps">
       <map>
@@ -35,3 +34,4 @@
     </states>
   </component>
 </project>
+
