@@ -231,6 +231,61 @@ func (rf *Raft) String() string {
 	return fmt.Sprintf("me: %d,Term: %d,length of log:%d", rf.me, rf.currentTerm, len(rf.log))
 }
 
+func (rf *Raft)stateMachine() {
+	count := 0
+	c1 := make(chan bool)
+	for true{
+		switch rf.state {
+		case FOLLOW:
+			// 如果一定时间内没收到heart beat，则转换为candidate
+			rf.mu.Lock()
+			rf.state = CANDIDATE
+			rf.mu.Unlock()
+		case CANDIDATE:
+			go func() {
+				//randDuration := time.Duration(150 + rand.Intn(150))
+				//time.Sleep(randDuration * time.Millisecond)
+				c1 <- true
+			}()
+			// 等待一段时间后，开始竞选
+			_ = <-c1
+			rf.mu.Lock()
+			rf.currentTerm ++
+			rf.voteFor = rf.me
+			rf.mu.Unlock()
+
+			args := RequestVoteArgs{rf.currentTerm, rf.me, 0, 0}
+			if len(rf.log) > 0 {
+				lastLog := rf.log[len(rf.log)-1]
+				args.LastLogTerm = lastLog.Term
+				args.LastLogIndex = len(rf.log)
+			}
+			for i := range rf.peers {
+				if rf.me != i {
+					go func(index int) {
+						res := &RequestVoteReply{}
+						r := rf.sendRequestVote(index, args, res)
+						fmt.Printf("RPC result: %t\n", r)
+						if res.VoteGranted{
+							count += 1
+							if count*2 >= len(rf.peers) {
+								fmt.Println("I'm the leader")
+							}
+							fmt.Println("count " + strconv.Itoa(count))
+						}
+						fmt.Println(strconv.Itoa(rf.me) + "->" + strconv.Itoa(index))
+						fmt.Println(args)
+						fmt.Println(res)
+
+						fmt.Println(rf)
+					}(i)
+				}
+			}
+
+		}
+	}
+}
+
 //
 // the service or tester wants to create a Raft server. the ports
 // of all the Raft servers (including this one) are in peers[].
@@ -258,61 +313,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
-	var count int
-	c1 := make(chan bool)
-
-	for true{
-		switch rf.state {
-		case FOLLOW:
-			// 如果一定时间内没收到heart beat，则转换为candidate
-			rf.mu.Lock()
-			rf.state = CANDIDATE
-			rf.mu.Unlock()
-		case CANDIDATE:
-			go func() {
-				//randDuration := time.Duration(150 + rand.Intn(150))
-				//time.Sleep(randDuration * time.Millisecond)
-				c1 <- true
-			}()
-			// 等待一段时间后，开始竞选
-			_ = <-c1
-			rf.mu.Lock()
-			rf.currentTerm ++
-			rf.voteFor = me
-			rf.mu.Unlock()
-
-			args := RequestVoteArgs{rf.currentTerm, rf.me, 0, 0}
-			if len(rf.log) > 0 {
-				lastLog := rf.log[len(rf.log)-1]
-				args.LastLogTerm = lastLog.Term
-				args.LastLogIndex = len(rf.log)
-			}
-			for i := range rf.peers {
-				if rf.me != i {
-					go func(index int) {
-						res := &RequestVoteReply{}
-						r := rf.sendRequestVote(index, args, res)
-						fmt.Printf("RPC result: %t\n", r)
-						if res.VoteGranted{
-							count += 1
-							if count*2 >= len(rf.peers) {
-								fmt.Println("I'm the leader")
-							}
-							fmt.Println("count " + strconv.Itoa(count))
-						}
-						fmt.Println(strconv.Itoa(me) + "->" + strconv.Itoa(index))
-						fmt.Println(args)
-						fmt.Println(res)
-
-						fmt.Println(rf)
-					}(i)
-				}
-			}
-
-		}
-	}
-
-
-
+	go rf.stateMachine()
 	return rf
 }
