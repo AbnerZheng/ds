@@ -26,6 +26,8 @@ import (
 	//"time"
 	//"math/rand"
 	"strconv"
+	"time"
+	"math/rand"
 )
 
 // import "bytes"
@@ -147,31 +149,30 @@ type RequestVoteReply struct {
 //
 func (rf *Raft) RequestVote(args RequestVoteArgs, reply *RequestVoteReply) {
 	reply.Term = rf.currentTerm
-	reply.VoteGranted = true
-	//if args.Term < rf.currentTerm { // 如果自己的term已经被过来拉票的server还高的话，直接否决
-	//	reply.VoteGranted = false
-	//} else {
-	//	if rf.voteFor == -1 || rf.voteFor == args.CandidateId { // go 中没有null，所以以0来表示
-	//		if len(rf.log) == 0 {
-	//			reply.VoteGranted = true
-	//		}else {
-	//			lastLog := rf.log[len(rf.log)-1]
-	//			if lastLog.Term < args.LastLogTerm {
-	//				reply.VoteGranted = true
-	//			} else if lastLog.Term == args.LastLogTerm && len(rf.log) < args.LastLogIndex {
-	//				reply.VoteGranted = true
-	//			} else {
-	//				reply.VoteGranted = false
-	//			}
-	//		}
-	//	}
-	//}
-
-	//if reply.VoteGranted {
-	//	rf.mu.Lock()
-	//	rf.voteFor = args.CandidateId
-	//	rf.mu.Unlock()
-	//}
+	if args.Term < rf.currentTerm { // 如果自己的term已经被过来拉票的server还高的话，直接否决
+		reply.VoteGranted = false
+	} else {
+		if rf.voteFor == -1 || rf.voteFor == args.CandidateId { // go 中没有null，所以以0来表示
+			if len(rf.log) == 0 {
+				reply.VoteGranted = true
+			}else {
+				lastLog := rf.log[len(rf.log)-1]
+				if lastLog.Term < args.LastLogTerm {
+					reply.VoteGranted = true
+				} else if lastLog.Term == args.LastLogTerm && len(rf.log) < args.LastLogIndex {
+					reply.VoteGranted = true
+				} else {
+					reply.VoteGranted = false
+				}
+			}
+		}
+	}
+	//
+	if reply.VoteGranted {
+		rf.mu.Lock()
+		rf.voteFor = args.CandidateId
+		rf.mu.Unlock()
+	}
 }
 
 //
@@ -232,7 +233,7 @@ func (rf *Raft) String() string {
 }
 
 func (rf *Raft)stateMachine() {
-	count := 0
+
 	c1 := make(chan bool)
 	for true{
 		switch rf.state {
@@ -242,9 +243,10 @@ func (rf *Raft)stateMachine() {
 			rf.state = CANDIDATE
 			rf.mu.Unlock()
 		case CANDIDATE:
+			count := 0
 			go func() {
-				//randDuration := time.Duration(150 + rand.Intn(150))
-				//time.Sleep(randDuration * time.Millisecond)
+				randDuration := time.Duration(150 + rand.Intn(150))
+				time.Sleep(randDuration * time.Millisecond)
 				c1 <- true
 			}()
 			// 等待一段时间后，开始竞选
@@ -264,24 +266,24 @@ func (rf *Raft)stateMachine() {
 				if rf.me != i {
 					go func(index int) {
 						res := &RequestVoteReply{}
-						r := rf.sendRequestVote(index, args, res)
-						fmt.Printf("RPC result: %t\n", r)
+						ok := rf.sendRequestVote(index, args, res)
+						if !ok{
+							fmt.Println("rpc error")
+						}
 						if res.VoteGranted{
 							count += 1
 							if count*2 >= len(rf.peers) {
 								fmt.Println("I'm the leader")
+								rf.state = LEADER
 							}
 							fmt.Println("count " + strconv.Itoa(count))
 						}
-						fmt.Println(strconv.Itoa(rf.me) + "->" + strconv.Itoa(index))
-						fmt.Println(args)
-						fmt.Println(res)
-
-						fmt.Println(rf)
 					}(i)
 				}
 			}
-
+		case LEADER:
+			fmt.Println("I'm the leader")
+			return
 		}
 	}
 }
@@ -310,9 +312,9 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.me = me
 	// Your initialization code here.
 	rf.state = FOLLOW
-
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
+	rf.voteFor = -1
 	go rf.stateMachine()
 	return rf
 }
